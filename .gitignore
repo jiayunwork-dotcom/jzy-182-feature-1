@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+backend/data/
+*.db
+*.db-wal
+*.db-shm
+.venv/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Build artifact (produced by Docker stage 1 / npm run build)
+backend/static/
+
+# OS
+.DS_Store

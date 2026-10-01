@@ -1,0 +1,13 @@
+services:
+  ccpm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ccpm-data:/data
+    restart: unless-stopped
+
+volumes:
+  ccpm-data:
