@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import fever, planning, storage
+from app import fever, planning, portfolio, portfolio_validation, storage
 from app.reports import make_report, validate_report_payload
 from app.validation import ValidationError, parse_input
 
@@ -154,6 +154,129 @@ def create_app(store: Optional[storage.Storage] = None) -> FastAPI:
             "points": fever.trajectory(
                 plan, reports, record["yellow_line"], record["red_line"]
             ),
+        }
+
+    # ---------------------------------------------------------------- #
+    # Portfolios: shared pool, drum, staggered placement
+    # ---------------------------------------------------------------- #
+    def _require_portfolio(portfolio_id: str) -> dict[str, Any]:
+        record = store.get_portfolio(portfolio_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="portfolio not found")
+        return record
+
+    def _portfolio_view(portfolio_id: str) -> dict[str, Any]:
+        record = store.get_portfolio(portfolio_id)
+        members = store.get_portfolio_members(portfolio_id)
+        projects = {m["project_id"]: store.get_project(m["project_id"]) for m in members}
+        return portfolio.build_view(record, members, projects)
+
+    @app.post("/api/portfolios")
+    def create_portfolio(payload: dict[str, Any]):
+        try:
+            spec = portfolio_validation.parse_create_payload(payload)
+        except ValidationError as exc:
+            return JSONResponse(status_code=422, content={"errors": exc.errors})
+        portfolio_id = uuid.uuid4().hex
+        store.save_portfolio(portfolio_id, spec["name"], spec["pool"], spec["drum"])
+        return {"id": portfolio_id, "portfolio": _portfolio_view(portfolio_id)}
+
+    @app.get("/api/portfolios")
+    def list_portfolios():
+        return {"portfolios": store.list_portfolios()}
+
+    @app.get("/api/portfolios/{portfolio_id}")
+    def get_portfolio(portfolio_id: str):
+        _require_portfolio(portfolio_id)
+        return _portfolio_view(portfolio_id)
+
+    @app.put("/api/portfolios/{portfolio_id}")
+    def update_portfolio(portfolio_id: str, payload: dict[str, Any]):
+        with store.transaction():
+            current = _require_portfolio(portfolio_id)
+            try:
+                changes = portfolio_validation.parse_update_payload(payload)
+            except ValidationError as exc:
+                return JSONResponse(status_code=422, content={"errors": exc.errors})
+            members = store.get_portfolio_members(portfolio_id)
+            member_projects = [
+                parse_input(store.get_project(m["project_id"])["input"]) for m in members
+            ]
+            errors = portfolio_validation.update_errors(current, changes, member_projects)
+            if errors:
+                return JSONResponse(status_code=422, content={"errors": errors})
+            store.update_portfolio(
+                portfolio_id,
+                changes.get("name", current["name"]),
+                changes.get("pool", current["pool"]),
+                changes.get("drum", current["drum_resource"]),
+            )
+        return _portfolio_view(portfolio_id)
+
+    @app.post("/api/portfolios/{portfolio_id}/projects")
+    def join_portfolio(portfolio_id: str, payload: dict[str, Any]):
+        project_id = payload.get("project_id") if isinstance(payload, dict) else None
+        if not isinstance(project_id, str) or not project_id.strip():
+            return JSONResponse(
+                status_code=422,
+                content={"errors": [{"field": "project_id", "message": "project id is required"}]},
+            )
+        project_id = project_id.strip()
+        with store.transaction():
+            record = _require_portfolio(portfolio_id)
+            project_record = store.get_project(project_id)
+            if project_record is None:
+                raise HTTPException(status_code=404, detail="project not found")
+            members = store.get_portfolio_members(portfolio_id)
+            if any(m["project_id"] == project_id for m in members):
+                # re-joining is a no-op: the frozen placement is returned as-is
+                return {"already_member": True, "portfolio": _portfolio_view(portfolio_id)}
+
+            project = parse_input(project_record["input"])
+            pool = {p["name"]: p["capacity"] for p in record["pool"]}
+            errors = portfolio_validation.join_errors(project, pool)
+            if errors:
+                return JSONResponse(status_code=422, content={"errors": errors})
+
+            drum = portfolio.effective_drum(record)
+            if drum is None:
+                placed = [
+                    parse_input(store.get_project(m["project_id"])["input"]) for m in members
+                ]
+                drum = portfolio.identify_drum([*placed, project], pool)
+                if drum is not None:
+                    store.set_auto_drum(portfolio_id, drum)
+
+            offset = 0.0
+            if drum is not None:
+                existing = []
+                for m in members:
+                    placed_record = store.get_project(m["project_id"])
+                    existing.extend(
+                        portfolio.drum_segments(
+                            placed_record["plan"]["tasks"], m["offset"], drum
+                        )
+                    )
+                candidate = portfolio.drum_segments(project_record["plan"]["tasks"], 0.0, drum)
+                try:
+                    offset = portfolio.compute_offset(pool[drum], existing, candidate)
+                except portfolio.PortfolioConflictError as exc:
+                    return JSONResponse(
+                        status_code=409,
+                        content={"errors": [{"field": "pool", "message": str(exc)}]},
+                    )
+            seq = store.next_join_seq(portfolio_id)
+            store.add_portfolio_member(portfolio_id, project_id, offset, seq)
+            placement = {
+                "project_id": project_id,
+                "offset": offset,
+                "join_seq": seq,
+                "drum": drum,
+            }
+        return {
+            "already_member": False,
+            "placement": placement,
+            "portfolio": _portfolio_view(portfolio_id),
         }
 
     # static frontend (served by the backend in the runtime image) ------ #

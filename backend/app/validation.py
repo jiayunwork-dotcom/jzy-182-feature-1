@@ -75,7 +75,13 @@ def parse_input(raw: dict[str, Any]) -> ProjectInput:
         cap = _coerce_number(r.get("capacity"), f"{base}.capacity", errors)
         if cap is not None and cap < 0:
             errors.append({"field": f"{base}.capacity", "message": "capacity must not be negative"})
-        resources.append(Resource(name=rname, capacity=cap if cap is not None else 0.0))
+        shared = r.get("shared", False)
+        if not isinstance(shared, bool):
+            errors.append({"field": f"{base}.shared", "message": "must be true or false"})
+            shared = False
+        resources.append(
+            Resource(name=rname, capacity=cap if cap is not None else 0.0, shared=shared)
+        )
 
     tasks: list[Task] = []
     raw_tasks = raw.get("tasks", [])

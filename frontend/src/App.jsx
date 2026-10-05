@@ -4,6 +4,8 @@ import ProjectForm from './components/ProjectForm.jsx'
 import GanttChart from './components/GanttChart.jsx'
 import FeverChart from './components/FeverChart.jsx'
 import ReportPanel from './components/ReportPanel.jsx'
+import PortfolioForm from './components/PortfolioForm.jsx'
+import PortfolioView from './components/PortfolioView.jsx'
 
 export default function App() {
   const [projects, setProjects] = useState([])
@@ -14,25 +16,44 @@ export default function App() {
   const [rule, setRule] = useState('')
   const [replayAt, setReplayAt] = useState('')
   const [replayPoint, setReplayPoint] = useState(null)
+  const [portfolios, setPortfolios] = useState([])
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState(null)
+  const [showPortfolioForm, setShowPortfolioForm] = useState(false)
 
   const refreshList = useCallback(async () => {
     const body = await api.listProjects()
     setProjects(body.projects)
   }, [])
 
+  const refreshPortfolios = useCallback(async () => {
+    const body = await api.listPortfolios()
+    setPortfolios(body.portfolios)
+  }, [])
+
   useEffect(() => {
     refreshList()
+    refreshPortfolios()
     api.rule().then((b) => setRule(b.rule)).catch(() => {})
-  }, [refreshList])
+  }, [refreshList, refreshPortfolios])
 
   const openProject = useCallback(async (id) => {
     setSelectedId(id)
+    setSelectedPortfolioId(null)
     setShowForm(false)
+    setShowPortfolioForm(false)
     const [detail, traj] = await Promise.all([api.getProject(id), api.trajectory(id)])
     setProject(detail)
     setTrajectory(traj)
     setReplayPoint(null)
     setReplayAt('')
+  }, [])
+
+  const openPortfolio = useCallback((id) => {
+    setSelectedPortfolioId(id)
+    setSelectedId(null)
+    setProject(null)
+    setShowForm(false)
+    setShowPortfolioForm(false)
   }, [])
 
   const refreshTrajectory = useCallback(async () => {
@@ -49,6 +70,13 @@ export default function App() {
     await openProject(body.id)
   }
 
+  const createPortfolio = async (payload) => {
+    const body = await api.createPortfolio(payload)
+    await refreshPortfolios()
+    openPortfolio(body.id)
+    return body
+  }
+
   const doReplay = async () => {
     if (!replayAt || !selectedId) return
     const iso = new Date(replayAt).toISOString()
@@ -60,11 +88,11 @@ export default function App() {
     <div className="app">
       <header>
         <h1>关键链项目管理平台</h1>
-        <p className="subtitle">Critical Chain · 资源冲突消解 · 缓冲管理 · 发烧图（计算全在后端）</p>
+        <p className="subtitle">Critical Chain · 资源冲突消解 · 缓冲管理 · 发烧图 · 多项目组合（计算全在后端）</p>
       </header>
 
       <aside className="sidebar">
-        <button className="primary" onClick={() => setShowForm((v) => !v)}>
+        <button className="primary" onClick={() => { setShowForm((v) => !v); setShowPortfolioForm(false) }}>
           {showForm ? '收起录入' : '＋ 新建 / 导入项目'}
         </button>
         <h3>项目列表</h3>
@@ -76,6 +104,22 @@ export default function App() {
           ))}
           {projects.length === 0 && <li className="muted">还没有项目</li>}
         </ul>
+
+        <button className="primary" onClick={() => { setShowPortfolioForm((v) => !v); setShowForm(false) }}>
+          {showPortfolioForm ? '收起组合录入' : '＋ 新建项目组合'}
+        </button>
+        <h3>项目组合</h3>
+        <ul className="project-list">
+          {portfolios.map((p) => (
+            <li key={p.id} className={p.id === selectedPortfolioId ? 'selected' : ''}>
+              <button onClick={() => openPortfolio(p.id)} title={p.name}>
+                {p.name}（{p.member_count}）
+              </button>
+            </li>
+          ))}
+          {portfolios.length === 0 && <li className="muted">还没有组合</li>}
+        </ul>
+
         <details className="rule-details">
           <summary>排程规则（后端固定）</summary>
           <p>{rule}</p>
@@ -84,12 +128,18 @@ export default function App() {
 
       <main className="content">
         {showForm && <ProjectForm onCreate={createProject} />}
+        {showPortfolioForm && <PortfolioForm onCreated={createPortfolio} />}
 
-        {!project && !showForm && (
+        {!project && !selectedPortfolioId && !showForm && !showPortfolioForm && (
           <div className="empty">
             <p>从左侧新建项目，或点“载入四任务示例”快速体验：A(4)→B(6)/C(3)→D(2)，B、C 共用一名工程师。</p>
             <p>计划阶段按激进工期在考虑逻辑依赖与资源容量后排出关键链，并放置项目缓冲与汇入缓冲；执行阶段通过追加式汇报流投影出发烧图。</p>
+            <p>多个项目可以放进一个组合：组合维护共享资源池并确定“鼓”资源，各项目按鼓的节拍错开排入，共享资源冲突在组合时间轴上一目了然。</p>
           </div>
+        )}
+
+        {selectedPortfolioId && (
+          <PortfolioView portfolioId={selectedPortfolioId} projects={projects} />
         )}
 
         {project && (

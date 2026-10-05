@@ -55,6 +55,8 @@ button.mini { padding: 0 8px; font-size: 12px; }
 }
 .form-row { display: flex; gap: 10px; margin: 6px 0; flex-wrap: wrap; align-items: center; }
 .form-row label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.form-row label.check { color: var(--muted); font-size: 12px; }
+.form-row select { min-width: 140px; }
 input, select, textarea {
   font-size: 13px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px;
   font-family: inherit;

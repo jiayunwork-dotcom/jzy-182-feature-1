@@ -24,7 +24,7 @@ export default function ProjectForm({ onCreate }) {
   const [errors, setErrors] = useState([])
 
   const addResource = () =>
-    setDraft({ ...draft, resources: [...draft.resources, { name: '', capacity: 1 }] })
+    setDraft({ ...draft, resources: [...draft.resources, { name: '', capacity: 1, shared: false }] })
   const addTask = () =>
     setDraft({
       ...draft,
@@ -49,7 +49,11 @@ export default function ProjectForm({ onCreate }) {
     name: d.name,
     yellow_line: Number(d.yellow_line),
     red_line: Number(d.red_line),
-    resources: d.resources.map((r) => ({ name: r.name, capacity: Number(r.capacity) })),
+    resources: d.resources.map((r) => ({
+      name: r.name,
+      capacity: Number(r.capacity),
+      shared: !!r.shared,
+    })),
     tasks: d.tasks.map((t) => ({
       name: t.name,
       predecessors: String(t.predecessors || '')
@@ -109,6 +113,10 @@ export default function ProjectForm({ onCreate }) {
               <input placeholder="资源名" value={r.name} onChange={(e) => updateRes(i, 'name', e.target.value)} />
               <input type="number" placeholder="可用数量" value={r.capacity}
                 onChange={(e) => updateRes(i, 'capacity', e.target.value)} />
+              <label className="check" title="声明该资源取自组合的共享资源池，而不是项目私有">
+                <input type="checkbox" checked={!!r.shared}
+                  onChange={(e) => updateRes(i, 'shared', e.target.checked)} /> 取自组合池
+              </label>
             </div>
           ))}
 

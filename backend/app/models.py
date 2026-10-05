@@ -12,6 +12,9 @@ from typing import Any, Optional
 class Resource:
     name: str
     capacity: float  # available quantity (non-negative)
+    # declared at entry time as drawn from a portfolio's shared pool rather
+    # than being a private copy; the standalone plan still uses ``capacity``
+    shared: bool = False
 
 
 @dataclass(frozen=True)
