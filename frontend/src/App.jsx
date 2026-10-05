@@ -4,8 +4,10 @@ import ProjectForm from './components/ProjectForm.jsx'
 import GanttChart from './components/GanttChart.jsx'
 import FeverChart from './components/FeverChart.jsx'
 import ReportPanel from './components/ReportPanel.jsx'
+import PortfolioView from './components/PortfolioView.jsx'
 
 export default function App() {
+  const [view, setView] = useState('projects')
   const [projects, setProjects] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [project, setProject] = useState(null)
@@ -60,9 +62,21 @@ export default function App() {
     <div className="app">
       <header>
         <h1>关键链项目管理平台</h1>
-        <p className="subtitle">Critical Chain · 资源冲突消解 · 缓冲管理 · 发烧图（计算全在后端）</p>
+        <p className="subtitle">Critical Chain · 资源冲突消解 · 缓冲管理 · 发烧图 · 多项目按鼓错峰（计算全在后端）</p>
+        <nav className="view-tabs">
+          <button className={view === 'projects' ? 'active' : ''} onClick={() => setView('projects')}>
+            单项目
+          </button>
+          <button className={view === 'portfolios' ? 'active' : ''} onClick={() => setView('portfolios')}>
+            项目组合
+          </button>
+        </nav>
       </header>
 
+      {view === 'portfolios' ? (
+        <PortfolioView />
+      ) : (
+      <>
       <aside className="sidebar">
         <button className="primary" onClick={() => setShowForm((v) => !v)}>
           {showForm ? '收起录入' : '＋ 新建 / 导入项目'}
@@ -146,6 +160,8 @@ export default function App() {
           </section>
         )}
       </main>
+      </>
+      )}
     </div>
   )
 }

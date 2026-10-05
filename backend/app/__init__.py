@@ -13,5 +13,6 @@ Modules are split by responsibility:
 - state:       report stream -> per-task runtime state projection
 - fever:       fever chart points, zones, historical replay
 - storage:     SQLite persistence
+- portfolio:   multi-project portfolios (pool, drum, staggering), own package
 - api/main:    HTTP layer
 """

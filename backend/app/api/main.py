@@ -11,6 +11,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import fever, planning, storage
+from app.portfolio.api import build_router
+from app.portfolio.persistence import PortfolioStore
+from app.portfolio.service import PortfolioService
 from app.reports import make_report, validate_report_payload
 from app.validation import ValidationError, parse_input
 
@@ -24,13 +27,22 @@ def create_app(store: Optional[storage.Storage] = None) -> FastAPI:
     store = store or storage.Storage(db_path)
     store.init_db()
 
+    # portfolios share the same SQLite file/WAL volume but keep their own
+    # tables, store object and responsibility-separated package
+    pstore = PortfolioStore(store.db_path)
+    pstore.init_db()
+    portfolio_service = PortfolioService(pstore)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         store.init_db()
+        pstore.init_db()
         yield
 
     app = FastAPI(title="Critical Chain PM", version="1.0.0", lifespan=lifespan)
     app.state.store = store
+    app.state.portfolio_service = portfolio_service
+    app.include_router(build_router(portfolio_service))
 
     def plan_from_record(record: dict[str, Any]):
         return planning.plan_project(record["input"])

@@ -29,4 +29,17 @@ export const api = {
   state: (id, at) =>
     request(`/api/projects/${id}/state${at ? `?at=${encodeURIComponent(at)}` : ''}`),
   trajectory: (id) => request(`/api/projects/${id}/trajectory`),
+
+  // portfolios
+  listPortfolios: () => request('/api/portfolios'),
+  getPortfolio: (id) => request(`/api/portfolios/${id}`),
+  createPortfolio: (payload) =>
+    request('/api/portfolios', { method: 'POST', body: JSON.stringify(payload) }),
+  updatePortfolio: (id, payload) =>
+    request(`/api/portfolios/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  joinPortfolio: (id, payload) =>
+    request(`/api/portfolios/${id}/members`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 }
